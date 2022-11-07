@@ -47,13 +47,15 @@ WHEN DEVICE = 'iOS' THEN  'transferwise_ios'
 WHEN DEVICE = 'Android' THEN 'transferwise_android'
 WHEN DEVICE = 'Desktop' THEN 'transferwise_web'
 WHEN DEVICE = 'Mobile Web' THEN 'transferwise_web'
-ELSE 'UNKNOWN'
+WHEN DEVICE = 'Desktop or Mobile Web' THEN 'Web (Desktop or Mobile)'
+ELSE 'Unknown'
 END AS DEVICE_FINAL,CASE
 WHEN PREVIOUS_DEVICE = 'iOS' THEN  'transferwise_ios'
 WHEN PREVIOUS_DEVICE = 'Android' THEN 'transferwise_android'
 WHEN PREVIOUS_DEVICE = 'Desktop' THEN 'transferwise_web'
 WHEN PREVIOUS_DEVICE = 'Mobile Web' THEN 'transferwise_web'
-ELSE 'UNKNOWN'
+WHEN PREVIOUS_DEVICE = 'Desktop or Mobile Web' THEN 'Web (Desktop or Mobile)'
+ELSE 'Unknown'
 END AS PREVIOUS_DEVICE_FINAL
 FROM PREVIOUS_DATA),
 
