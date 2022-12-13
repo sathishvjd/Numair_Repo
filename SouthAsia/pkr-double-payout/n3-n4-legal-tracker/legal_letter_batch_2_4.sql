@@ -1,7 +1,7 @@
 
 /*
  Author: Numair Fazili
- Description: The following query is used to extract the remaining open transfers to whom legal letters will be sent out in batches
+ Description: The following query is used to extract the remaining open transfers in N3/N4 category with transfers < 800 GBP to whom legal letters will be sent out
  Note!!: This query must only be used as a reference and cannot be used after the legal letters are sent out - This is because the underlying data is subject to changes (balance records, work item states etc)
  */
 
@@ -72,28 +72,34 @@ WHERE TRUE
     GROUP BY 1
     )
 
-
-
-
-SELECT
-TRANSFER_ID,
-SOURCE_CURRENCY,
-TARGET_CURRENCY,
-AMOUNT_IN_SOURCE_CCY,
-FEES_IN_SOURCE_CCY,
-AMOUNT_IN_GBP,
-LAST_UPDATED,
-CATEGORY,
-PAYIN_CHANNEL,
+,TEMP_TABLE AS (SELECT
 USER_PROFILE_ID,
-USER_ID,
-IFF(BV.PROFILE_ID IS NOT NULL,TRUE,FALSE) AS HAS_ACTIVE_BALANCE,
-IFF(BCY.PROFILE_ID IS NOT NULL,TRUE,FALSE) AS HAS_ACTIVE_BALANCE_IN_TX_CCY
+SOURCE_CURRENCY,
+COUNT(*) AS NUM_TX,
+SUM(AMOUNT_IN_SOURCE_CCY) AS TOTAL_AMOUNT_SOURCE_CCY,
+SUM(FEES_IN_SOURCE_CCY) AS TOTAL_FEES_SOURCE_CCY,
+SUM(AMOUNT_IN_GBP) AS TOTAL_AMOUNT_GBP,
+LISTAGG(DISTINCT TRANSFER_ID,';') AS TRANSFER_IDS,
+LISTAGG(DISTINCT CATEGORY,';') AS CATEGORY,
+LISTAGG(DISTINCT PAYIN_CHANNEL) AS PAYIN_CHANNELS,
+LISTAGG(DISTINCT USER_ID,';') AS USER_ID,
+LISTAGG(DISTINCT IFF(BV.PROFILE_ID IS NOT NULL,TRUE,FALSE),';') AS HAS_ACTIVE_BALANCE,
+LISTAGG(DISTINCT IFF(BCY.PROFILE_ID IS NOT NULL,TRUE,FALSE),';') AS HAS_ACTIVE_BALANCE_IN_TX_CCY
 FROM MAIN_TABLE
     LEFT JOIN BALANCE_CHECK BV ON BV.PROFILE_ID = MAIN_TABLE.USER_PROFILE_ID
     LEFT JOIN BALANCE_CHECK_SAME_CCY BCY ON BCY.PROFILE_ID = MAIN_TABLE.USER_PROFILE_ID
-
 WHERE TRUE
-AND ((CATEGORY NOT IN ('N4','N3')) OR AMOUNT_IN_GBP <= 800) -- EXCLUDE PREVIOUS BATCH (refer to: https://github.com/transferwise/Numair_Repo/blob/main/SouthAsia/pkr-double-payout/n3-n4-legal-tracker/legal_letter_records.sql)
+AND (CATEGORY IN ('N4','N3'))
+AND AMOUNT_IN_GBP <= 800 -- EXCLUDE PREVIOUS BATCH (refer to: https://github.com/transferwise/Numair_Repo/blob/main/SouthAsia/pkr-double-payout/n3-n4-legal-tracker/legal_letter_records.sql)
 AND WORK_ITEM_STATE != 'CLOSED'
-ORDER BY USER_PROFILE_ID -- MAINTAIN STRICT ORDERING SO THAT TRANSFERS BELONGING TO THE SAME CST ARE NOT SPLIT ACROSS GROUPS
+GROUP BY 1,2 -- AGGREGATE TX AT PROFILE LEVEL AND SOURCE CCY
+ORDER BY 1)
+
+
+SELECT
+CASE
+    WHEN TOTAL_AMOUNT_SOURCE_CCY > 200 THEN '(200,800]'
+    ELSE '(0,200]' END AS BATCH,
+TEMP_TABLE.*
+FROM TEMP_TABLE
+ORDER BY BATCH DESC,USER_PROFILE_ID
